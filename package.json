@@ -20,6 +20,8 @@
   "devDependencies": {
     "tailwindcss": "^3.3.6",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32"
+    "postcss": "^8.4.32",
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0"
   }
 }
