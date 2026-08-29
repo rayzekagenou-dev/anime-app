@@ -1329,7 +1329,83 @@ export default function HomePage() {
   if (isOwner) xp = 9999999
   const levelInfo = getLevelInfo(xp)
 
+  // Daily bonus & notification
+  const [lastLogin, setLastLogin] = useLocalStorage('ryze_last_login_' + userEmail, null)
+  const [dailyBonusClaimed, setDailyBonusClaimed] = useState(false)
+  const [notifications, setNotifications] = useLocalStorage('ryze_notifications_' + userEmail, [])
+  const [theme, setTheme] = useLocalStorage('ryze_theme', 'dark')
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [showNotif, setShowNotif] = useState(false)
+
+  // ============================================
+  // DAILY BONUS & NOTIFICATION FUNCTIONS
+  // ============================================
+  useEffect(() => {
+    if (!userEmail) return
+    const today = new Date().toDateString()
+    if (lastLogin !== today) {
+      setDailyBonusClaimed(false)
+    } else {
+      setDailyBonusClaimed(true)
+    }
+  }, [userEmail, lastLogin])
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light-mode')
+    } else {
+      document.documentElement.classList.remove('light-mode')
+    }
+  }, [theme])
+
+  useEffect(() => {
+    setUnreadCount(notifications.filter((n: any) => !n.read).length)
+  }, [notifications])
+
+  const claimDailyBonus = () => {
+    const today = new Date().toDateString()
+    if (lastLogin !== today) {
+      const bonus = 50 + Math.floor(Math.random() * 100)
+      setCrystals((crystals || 0) + bonus)
+      setLastLogin(today)
+      setDailyBonusClaimed(true)
+      addNotification('🎁 Daily Bonus', `Kamu mendapat ${bonus} Crystal!`)
+      alert(`🎁 Daily bonus ${bonus} Crystal!`)
+    }
+  }
+
+  const addNotification = (title: string, message: string) => {
+    const newNotif = { 
+      id: Date.now(), 
+      title, 
+      message, 
+      read: false, 
+      timestamp: new Date().toISOString() 
+    }
+    setNotifications([newNotif, ...notifications])
+    setUnreadCount(prev => prev + 1)
+  }
+
+  const markAsRead = (id: number) => {
+    setNotifications(notifications.map((n: any) => 
+      n.id === id ? { ...n, read: true } : n
+    ))
+    setUnreadCount(notifications.filter((n: any) => !n.read).length - 1)
+  }
+
+  const markAllRead = () => {
+    setNotifications(notifications.map((n: any) => ({ ...n, read: true })))
+    setUnreadCount(0)
+  }
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(newTheme)
+  }
+
+  // ============================================
   // Functions
+  // ============================================
   const addCrystals = (amount: number) => {
     setCrystals((crystals || 0) + amount)
   }
@@ -1369,6 +1445,7 @@ export default function HomePage() {
       })
     }
     setLeaderboard(updatedLeaderboard)
+    addNotification('🎉 Giveaway!', `${userEmail} membuat giveaway ${duration} dengan ${winners} pemenang!`)
   }
 
   const fetchAnime = async (query: string) => {
@@ -1456,6 +1533,53 @@ export default function HomePage() {
             {isOwner && <Verified className="w-5 h-5 text-red-500" />}
             {isPremium && <BadgeCheck className="w-5 h-5 text-blue-400" />}
             {isTester && !isOwner && <Shield className="w-5 h-5 text-green-400" />}
+            
+            {session && !dailyBonusClaimed && (
+              <button 
+                onClick={claimDailyBonus}
+                className="text-xs px-3 py-1 bg-yellow-600 rounded-full hover:bg-yellow-700 transition animate-pulse"
+              >
+                🎁 Claim Bonus
+              </button>
+            )}
+
+            <button 
+              onClick={() => setShowNotif(!showNotif)}
+              className="relative p-2 hover:bg-gray-700 rounded-full transition"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            {showNotif && (
+              <div className="absolute top-full right-0 mt-2 w-80 max-h-80 overflow-y-auto bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50 p-2">
+                <div className="flex justify-between items-center mb-2 px-2">
+                  <h4 className="font-semibold text-sm">Notifikasi</h4>
+                  {notifications.filter((n: any) => !n.read).length > 0 && (
+                    <button onClick={markAllRead} className="text-xs text-blue-400 hover:underline">Tandai semua</button>
+                  )}
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-4">Belum ada notifikasi</p>
+                ) : (
+                  notifications.slice(0, 10).map((notif: any) => (
+                    <div 
+                      key={notif.id} 
+                      className={`p-2 rounded-lg mb-1 cursor-pointer hover:bg-gray-700 transition ${!notif.read ? 'bg-gray-700/50 border-l-4 border-orange-500' : ''}`}
+                      onClick={() => markAsRead(notif.id)}
+                    >
+                      <p className="text-sm font-semibold">{notif.title}</p>
+                      <p className="text-xs text-gray-400">{notif.message}</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{new Date(notif.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {isBlocked && (
@@ -1525,6 +1649,30 @@ export default function HomePage() {
                     <span className="font-semibold">{crystals}</span>
                   </div>
                 </div>
+
+                {session && (
+                  <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-xl p-4 border border-yellow-700/30">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Gift className="w-8 h-8 text-yellow-400" />
+                        <div>
+                          <p className="font-semibold">Daily Bonus</p>
+                          <p className="text-xs text-gray-400">Dapatkan crystal gratis setiap hari!</p>
+                        </div>
+                      </div>
+                      {dailyBonusClaimed ? (
+                        <span className="text-green-400 text-sm font-semibold">✅ Sudah diambil</span>
+                      ) : (
+                        <button 
+                          onClick={claimDailyBonus}
+                          className="px-4 py-2 bg-yellow-600 rounded-xl text-sm font-semibold hover:bg-yellow-700 transition"
+                        >
+                          🎁 Ambil
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <form onSubmit={handleSearch} className="flex">
                   <input type="text" placeholder="Cari anime favoritmu..." value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 px-4 py-3 rounded-l-xl bg-gray-800/80 border border-gray-700 focus:outline-none focus:border-orange-500 text-sm" />
@@ -1681,4 +1829,4 @@ export default function HomePage() {
       </AnimatePresence>
     </div>
   )
-}
+  }
