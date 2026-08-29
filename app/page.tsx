@@ -1023,13 +1023,16 @@ function OwnerPanel({
   testers, setTesters, 
   blockedUsers, setBlockedUsers, 
   premiumUsers, setPremiumUsers,
-  onGivePremium 
+  onGivePremium,
+  clans, setClans
 }: any) {
   const [newTesterEmail, setNewTesterEmail] = useState('')
   const [newPremiumEmail, setNewPremiumEmail] = useState('')
   const [blockUserId, setBlockUserId] = useState('')
   const [premiumGiveEmail, setPremiumGiveEmail] = useState('')
   const [premiumDays, setPremiumDays] = useState(30)
+  const [clanName, setClanName] = useState('')
+  const [selectedClan, setSelectedClan] = useState<any>(null)
 
   const addTester = () => {
     if (newTesterEmail && !testers.includes(newTesterEmail)) {
@@ -1069,6 +1072,48 @@ function OwnerPanel({
       onGivePremium(premiumGiveEmail, premiumDays)
       setPremiumGiveEmail('')
     }
+  }
+
+  const createClan = () => {
+    if (!clanName.trim()) return
+    const newClan = {
+      id: Date.now(),
+      name: clanName,
+      leader: 'rayzekagenou@gmail.com',
+      members: ['rayzekagenou@gmail.com'],
+      level: 1,
+      xp: 0,
+      createdAt: new Date().toISOString()
+    }
+    setClans([...clans, newClan])
+    setClanName('')
+    alert(`✅ Clan "${clanName}" berhasil dibuat!`)
+  }
+
+  const removeClan = (clanId: number) => {
+    if (confirm('Hapus clan ini?')) {
+      setClans(clans.filter((c: any) => c.id !== clanId))
+    }
+  }
+
+  const addMemberToClan = (clanId: number, email: string) => {
+    setClans(clans.map((c: any) => {
+      if (c.id === clanId && !c.members.includes(email)) {
+        return { ...c, members: [...c.members, email] }
+      }
+      return c
+    }))
+  }
+
+  const addClanXp = (clanId: number, amount: number) => {
+    setClans(clans.map((c: any) => {
+      if (c.id === clanId) {
+        const newXp = (c.xp || 0) + amount
+        const newLevel = Math.floor(newXp / 1000) + 1
+        return { ...c, xp: newXp, level: newLevel }
+      }
+      return c
+    }))
   }
 
   return (
@@ -1153,6 +1198,28 @@ function OwnerPanel({
         <div className="flex gap-2">
           <input type="number" value={premiumDays} onChange={(e) => setPremiumDays(parseInt(e.target.value) || 30)} placeholder="Hari..." className="w-24 px-3 py-2 rounded-lg bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500" />
           <button onClick={givePremium} className="px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition text-sm">Berikan</button>
+        </div>
+      </div>
+
+      {/* Clan Management */}
+      <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <Flag className="w-5 h-5 text-purple-400" /> Clan Management
+        </h3>
+        <div className="flex gap-2 mb-3">
+          <input type="text" value={clanName} onChange={(e) => setClanName(e.target.value)} placeholder="Nama Clan..." className="flex-1 px-3 py-2 rounded-lg bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+          <button onClick={createClan} className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition text-sm">Buat Clan</button>
+        </div>
+        <div className="space-y-2">
+          {clans.map((c: any) => (
+            <div key={c.id} className="flex items-center justify-between bg-gray-700/50 p-3 rounded-lg">
+              <div>
+                <p className="font-semibold">{c.name}</p>
+                <p className="text-xs text-gray-400">Leader: {c.leader} • {c.members?.length || 0} member • Lv.{c.level || 1}</p>
+              </div>
+              <button onClick={() => removeClan(c.id)} className="px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700 transition text-xs">Hapus</button>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -1256,37 +1323,82 @@ function SettingsPage({ session, signOut }: any) {
 }
 
 // ============================================
-// COMPONENT: TopClans
+// COMPONENT: TopClans (REAL DATA DARI LOCALSTORAGE)
 // ============================================
 function TopClans() {
-  const clans = [
-    { name: 'OCTAGRAM', level: 49, members: 255, xp: '9,51M' },
-    { name: 'Just Friend', level: 38, members: 339, xp: '4,23M' },
-    { name: 'WITCH', level: 33, members: 5, xp: '2,84M' },
-    { name: 'LYL', level: 28, members: 255, xp: '1,71M' },
-    { name: 'PC', level: 26, members: 205, xp: '1,38M' },
-    { name: 'SKYY FAMILY', level: 26, members: 177, xp: '1,35M' },
-    { name: 'NEE', level: 26, members: 216, xp: '1,33M' },
-    { name: 'AKA', level: 25, members: 265, xp: '1,23M' },
-  ]
+  const [clans, setClans] = useLocalStorage('ryze_clans', [])
+  const [sortBy, setSortBy] = useState('level') // level, members, xp
+
+  const sortedClans = [...clans].sort((a, b) => {
+    if (sortBy === 'level') return (b.level || 1) - (a.level || 1)
+    if (sortBy === 'members') return (b.members?.length || 0) - (a.members?.length || 0)
+    return (b.xp || 0) - (a.xp || 0)
+  })
+
+  if (sortedClans.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Flag className="w-6 h-6 text-orange-400" /> Top Clans
+        </h2>
+        <div className="bg-gray-800 rounded-xl p-8 text-center border border-gray-700">
+          <Flag className="w-16 h-16 mx-auto text-gray-600 mb-3" />
+          <p className="text-gray-400">Belum ada clan</p>
+          <p className="text-sm text-gray-500">Buat clan pertama di Owner Panel!</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-2xl font-bold flex items-center gap-2"><Flag className="w-6 h-6 text-orange-400" /> Top Clans</h2>
-      {clans.map((clan, i) => (
-        <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} className={`flex items-center gap-4 p-3 rounded-xl transition ${i === 0 ? 'bg-yellow-600/20 border border-yellow-500/50' : i === 1 ? 'bg-gray-400/20 border border-gray-400/50' : i === 2 ? 'bg-orange-600/20 border border-orange-500/50' : 'bg-gray-800 hover:bg-gray-700'}`}>
-          <div className="w-8 text-center font-bold text-sm text-yellow-400">#{i + 1}</div>
-          <div className="flex-1">
-            <p className="font-semibold">{clan.name}</p>
-            <div className="flex gap-3 text-xs text-gray-400">
-              <span>Lv {clan.level}</span>
-              <span>{clan.members} member</span>
-              <span>{clan.xp} XP</span>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Flag className="w-6 h-6 text-orange-400" /> Top Clans
+        </h2>
+        <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+          {['level', 'members', 'xp'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setSortBy(s)}
+              className={`px-3 py-1 rounded-lg text-xs transition ${
+                sortBy === s ? 'bg-orange-600 text-white' : 'text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              {s === 'level' ? '📊 Level' : s === 'members' ? '👥 Member' : '⚡ XP'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {sortedClans.slice(0, 10).map((clan: any, i: number) => (
+          <motion.div
+            key={clan.id || i}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className={`flex items-center gap-4 p-3 rounded-xl transition ${
+              i === 0 ? 'bg-yellow-600/20 border border-yellow-500/50' :
+              i === 1 ? 'bg-gray-400/20 border border-gray-400/50' :
+              i === 2 ? 'bg-orange-600/20 border border-orange-500/50' :
+              'bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            <div className="w-8 text-center font-bold text-sm text-yellow-400">#{i + 1}</div>
+            <div className="flex-1">
+              <p className="font-semibold">{clan.name}</p>
+              <div className="flex gap-3 text-xs text-gray-400">
+                <span>Lv {clan.level || 1}</span>
+                <span>{clan.members?.length || 0} member</span>
+                <span>{(clan.xp || 0).toLocaleString()} XP</span>
+              </div>
             </div>
-          </div>
-          {i === 0 && <Trophy className="w-5 h-5 text-yellow-400" />}
-        </motion.div>
-      ))}
+            {clan.leader === OWNER_EMAIL && <Crown className="w-4 h-4 text-yellow-400" />}
+            {i === 0 && <Trophy className="w-5 h-5 text-yellow-400" />}
+          </motion.div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1315,18 +1427,23 @@ export default function HomePage() {
   const [testers, setTesters] = useLocalStorage('ryze_testers', ['tester1@gmail.com', 'tester2@gmail.com'])
   const [premiumUsers, setPremiumUsers] = useLocalStorage('ryze_premium_users', ['premium1@gmail.com'])
   const [blockedUsers, setBlockedUsers] = useLocalStorage('ryze_blocked', [])
+  const [clans, setClans] = useLocalStorage('ryze_clans', [])
 
   const userEmail = session?.user?.email || ''
   const isOwner = userEmail === OWNER_EMAIL
   const isTester = testers.includes(userEmail)
   const isPremium = premiumUsers.includes(userEmail) || localStorage.getItem(`premium_${userEmail}`) === 'true'
 
+  // ============ OWNER UNLIMITED ============
+  const displayCrystals = isOwner ? 99999999 : crystals
+  const displayPremium = isOwner ? true : isPremium
+  let xp = history.length * 25 + watchlist.length * 10 + favorites.length * 15
+  if (isOwner) xp = 999999999
+
   // Block system
   const { isBlocked, remainingSeconds, formatTime, addSpam, unblock } = useBlockedStatus(session?.user?.id)
 
   // XP & Level
-  let xp = history.length * 25 + watchlist.length * 10 + favorites.length * 15
-  if (isOwner) xp = 9999999
   const levelInfo = getLevelInfo(xp)
 
   // Daily bonus & notification
@@ -1365,12 +1482,12 @@ export default function HomePage() {
   const claimDailyBonus = () => {
     const today = new Date().toDateString()
     if (lastLogin !== today) {
-      const bonus = 50 + Math.floor(Math.random() * 100)
+      const bonus = isOwner ? 999999 : 50 + Math.floor(Math.random() * 100)
       setCrystals((crystals || 0) + bonus)
       setLastLogin(today)
       setDailyBonusClaimed(true)
-      addNotification('🎁 Daily Bonus', `Kamu mendapat ${bonus} Crystal!`)
-      alert(`🎁 Daily bonus ${bonus} Crystal!`)
+      addNotification('🎁 Daily Bonus', `Kamu mendapat ${bonus.toLocaleString()} Crystal!`)
+      alert(`🎁 Daily bonus ${bonus.toLocaleString()} Crystal!`)
     }
   }
 
@@ -1404,9 +1521,13 @@ export default function HomePage() {
   }
 
   // ============================================
-  // Functions
+  // FUNCTIONS
   // ============================================
   const addCrystals = (amount: number) => {
+    if (isOwner) {
+      setCrystals(99999999)
+      return
+    }
     setCrystals((crystals || 0) + amount)
   }
 
@@ -1439,9 +1560,9 @@ export default function HomePage() {
         totalGiveaway: winners * count, 
         totalDays, 
         topDuration: duration,
-        isOwner,
-        isPremium,
-        isTester
+        isOwner: true,
+        isPremium: true,
+        isTester: true
       })
     }
     setLeaderboard(updatedLeaderboard)
@@ -1530,9 +1651,12 @@ export default function HomePage() {
             <h1 className="text-xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent flex items-center gap-2">
               <Zap className="w-5 h-5 text-orange-400" /> RyzeGames
             </h1>
-            {isOwner && <Verified className="w-5 h-5 text-red-500" />}
-            {isPremium && <BadgeCheck className="w-5 h-5 text-blue-400" />}
+            {/* 🟢 Centang Hijau = Tester */}
             {isTester && !isOwner && <Shield className="w-5 h-5 text-green-400" />}
+            {/* 🔵 Centang Biru = Premium */}
+            {(displayPremium || isPremium) && <BadgeCheck className="w-5 h-5 text-blue-400" />}
+            {/* 🔴 Centang Merah = Owner */}
+            {isOwner && <Verified className="w-5 h-5 text-red-500" />}
             
             {session && !dailyBonusClaimed && (
               <button 
@@ -1582,6 +1706,11 @@ export default function HomePage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Crystal Display */}
+            <div className="flex items-center gap-1 bg-gray-800 px-3 py-1 rounded-full text-sm">
+              <Gem className="w-4 h-4 text-purple-400" />
+              <span className="font-semibold">{isOwner ? '♾️' : displayCrystals.toLocaleString()}</span>
+            </div>
             {isBlocked && (
               <div className="flex items-center gap-1 bg-red-600/20 px-2 py-1 rounded-full text-xs text-red-400">
                 <TimerIcon className="w-3 h-3" /> {formatTime(remainingSeconds)}
@@ -1646,7 +1775,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Gem className="w-5 h-5 text-purple-400" />
-                    <span className="font-semibold">{crystals}</span>
+                    <span className="font-semibold">{isOwner ? '♾️' : displayCrystals.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -1752,7 +1881,7 @@ export default function HomePage() {
               <PremiumPage 
                 userEmail={userEmail} 
                 onPurchase={addCrystals} 
-                isPremium={isPremium} 
+                isPremium={displayPremium} 
               />
             )}
 
@@ -1774,8 +1903,8 @@ export default function HomePage() {
                   watchlist={watchlist} 
                   favorites={favorites} 
                   levelInfo={levelInfo} 
-                  crystals={crystals}
-                  isPremium={isPremium}
+                  crystals={displayCrystals}
+                  isPremium={displayPremium}
                   isTester={isTester}
                   isOwner={isOwner}
                 />
@@ -1805,6 +1934,8 @@ export default function HomePage() {
                 premiumUsers={premiumUsers}
                 setPremiumUsers={setPremiumUsers}
                 onGivePremium={givePremium}
+                clans={clans}
+                setClans={setClans}
               />
             )}
 
